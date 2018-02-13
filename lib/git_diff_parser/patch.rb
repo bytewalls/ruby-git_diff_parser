@@ -103,7 +103,14 @@ module GitDiffParser
 
     # @return [Array<Integer>] changed line numbers
     def changed_line_numbers
-      changed_lines.map(&:number)
+      return @changed_line_numbers if defined? @changed_line_numbers
+      @changed_line_numbers ||= changed_lines.map(&:number)
+    end
+
+    # @return [Array<Integer>] removed line numbers
+    def removed_line_numbers
+      return @removed_line_numbers if defined? @removed_line_numbers
+      @removed_line_numbers ||= removed_lines.map(&:number)
     end
 
     # @param line_number [Integer] line number
@@ -113,6 +120,34 @@ module GitDiffParser
       target = changed_lines.find { |line| line.number == line_number }
       return nil unless target
       target.patch_position
+    end
+
+    # @param line_number [Integer] line number
+    #
+    # @return [Integer] previous file line number
+    def find_previous_position_by_line_number(line_number)
+      return nil if changed_line_numbers.include?(line_number)
+
+      added_lines_before = changed_line_numbers.count { |x| x < line_number }
+      removed_lines_before = removed_lines_position_in_new.count { |x| x < line_number }
+
+      line_number - added_lines_before + removed_lines_before
+    end
+
+    # @return [Array<Integer>] lines where deleted lines would be inserted in new file
+    def removed_lines_position_in_new
+      added_lines_before = ->(line){ changed_line_numbers.count { |x| x < line } }
+      removed_lines_before = ->(line){ removed_line_numbers.count { |x| x < line} }
+
+      @removed_line_position_in_new ||= begin
+        array = []
+        removed_line_numbers.each do |x|
+          removed_before_x = removed_lines_before[x]
+          array.push x + added_lines_before[x - removed_before_x] - removed_before_x
+        end
+
+        array
+      end
     end
 
     private
